@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: stitch-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stitch
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-StitchDev2026!}
+      POSTGRES_DB: stitch
+    volumes:
+      - stitch_db:/var/lib/postgresql/data
+    networks:
+      - stitch
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stitch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: stitch-redis
+    restart: unless-stopped
+    networks:
+      - stitch
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: stitch-api
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - stitch
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${BACKEND_URL:-http://localhost:8001}
+    container_name: stitch-web
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${BACKEND_URL:-http://localhost:8001}
+    depends_on:
+      - backend
+    networks:
+      - stitch
+
+volumes:
+  stitch_db:
+
+networks:
+  stitch:
